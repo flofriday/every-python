@@ -135,6 +135,34 @@ def _get_configure_args(build_dir: Path, enable_jit: bool) -> list[str]:
     return args
 
 
+def _run_make_clean(
+    runner: CommandRunner,
+    verbose: bool,
+    progress: Progress,
+    task: TaskID,
+) -> None:
+    """Run the make clean step."""
+    output = get_output()
+    args = ["make", "clean"]
+
+    if not (REPO_DIR / "Makefile").exists():
+        return
+
+    if verbose:
+        progress.stop()
+        output.status(f"Running: {' '.join(args)}")
+    else:
+        progress.update(task, description="Cleaning repo...")
+
+    result = runner.run(args, cwd=REPO_DIR, capture_output=not verbose)
+
+    if not result.success:
+        if not verbose:
+            progress.stop()
+        output.error(f"Cleaning repo failed: {result.stderr if not verbose else ''}")
+        raise typer.Exit(1)
+
+
 def _run_configure(
     runner: CommandRunner,
     build_dir: Path,
@@ -264,6 +292,9 @@ def build_python(commit: str, enable_jit: bool = False, verbose: bool = False) -
             progress.stop()
             output.error(f"Failed to checkout {commit}: {result.stderr}")
             raise typer.Exit(1)
+
+        # Clean repo
+        _run_make_clean(runner, verbose, progress, task)
 
         # Configure
         _run_configure(runner, build_dir, enable_jit, verbose, progress, task)
